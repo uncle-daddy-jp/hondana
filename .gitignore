@@ -1,0 +1,37 @@
+# Local runtime data (qdrant storage, jobs.db, ingest state)
+data/
+
+# Windows NUL device (appears as untracked on Windows+Git)
+nul
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+*.egg-info/
+
+# Config (local overrides — template is config.example.yml)
+config.yml
+
+# Secrets
+.env
+
+# OS
+.DS_Store
+Thumbs.db
+
+# 他ツール設定
+.cursor/
+.opencode.json
+.claude/
+
+# ローカル専用（環境固有の値・運用メモ・Claude Code 開発ガイド）
+CLAUDE.local.md
+CLAUDE.md
+
+backup.log
+
+# maintainer-local Windows backup launcher (hardcoded path)
+scripts/run_backup.ps1

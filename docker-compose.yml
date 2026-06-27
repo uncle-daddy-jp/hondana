@@ -1,0 +1,95 @@
+services:
+  qdrant:
+    image: qdrant/qdrant:v1.17.1
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - ./data/qdrant:/qdrant/storage
+    restart: unless-stopped
+    stop_grace_period: 300s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "3"
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c ':>/dev/tcp/localhost/6333' 2>/dev/null || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+
+  api:
+    build: ./api
+    ports:
+      - "8200:8000"
+    env_file:
+      - path: ./.env
+        required: false
+    volumes:
+      - ./data/hondana:/data/hondana
+      - ${HONDANA_INBOX_DIR}:/inbox
+      - ${HONDANA_DONE_DIR}:/done
+      - ./config.yml:/app/config.yml
+      - ${USERPROFILE}/.cache/huggingface:/root/.cache/huggingface
+      # NAS バックアップ用の SSH 鍵（任意機能）。使う場合は .env で NAS_SSH_KEY_HOST を実鍵パスに。
+      # 未使用なら既定の /dev/null（空鍵）のままで OK — バックアップ rsync が無効になるだけ。
+      - ${NAS_SSH_KEY_HOST:-/dev/null}:/root/.ssh/nas_backup:ro
+      - ./.env:/secrets/project.env:ro
+      - ./scripts:/app/scripts:ro
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - GROQ_API_KEY=${GROQ_API_KEY:-}
+      - QDRANT_URL=http://qdrant:6333
+      - REDDIT_CLIENT_ID=${REDDIT_CLIENT_ID:-}
+      - REDDIT_CLIENT_SECRET=${REDDIT_CLIENT_SECRET:-}
+      - REDDIT_USER_AGENT=${REDDIT_USER_AGENT:-hondana:ingest:1.0}
+      - NAS_SSH_KEY=/root/.ssh/nas_backup
+    depends_on:
+      qdrant:
+        condition: service_healthy
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "3"
+
+  webui:
+    build: ./webui
+    ports:
+      - "8601:8501"
+    environment:
+      - HONDANA_API_URL=http://api:8000
+      - HONDANA_API_KEY=${HONDANA_API_KEY:-}
+    depends_on:
+      - api
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "3"
+
+  scheduler:
+    build: ./scripts/ingest
+    ports:
+      - "8888:8888"
+    volumes:
+      - ./data/ingest-state:/data/state
+    environment:
+      - HONDANA_URL=http://api:8000
+      - STATE_FILE_X=/data/state/x_ingest_state.json
+      - X_ACCESS_TOKEN=${X_ACCESS_TOKEN:-}
+      - X_CLIENT_ID=${X_CLIENT_ID:-}
+      - X_CLIENT_SECRET=${X_CLIENT_SECRET:-}
+    depends_on:
+      - api
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+

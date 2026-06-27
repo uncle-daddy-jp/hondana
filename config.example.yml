@@ -1,0 +1,86 @@
+# =============================================================================
+# HONDANA configuration template.
+#   cp config.example.yml config.yml   # 編集して使う（config.yml は git 管理外）
+# 変更は POST /api/config でホットリロードされる（コンテナ再起動は不要）。
+# API キー等のシークレットは config ではなく .env に置く（.env.example 参照）。
+# =============================================================================
+
+# --- API 認証 ----------------------------------------------------------------
+# 設定すると全 API/MCP に X-API-Key または Authorization: Bearer が必須になる。
+# 空（[]）なら開放。WebUI の Settings からも発行できる。
+api_keys: []
+
+# --- ストレージ / パス（コンテナ内パス）-------------------------------------
+data_dir: /data/hondana          # jobs.db と table_descriptions.json の保存先
+inbox_dir: /inbox                # 取り込み元（ホスト側は .env の HONDANA_INBOX_DIR）
+done_dir: /done                  # 取り込み後の移動先（同 HONDANA_DONE_DIR）
+instance_name: HONDANA
+
+# =============================================================================
+# 埋め込み（Embeddings）— ローカル(既定) か リモート(OpenAI互換) を選ぶ
+# =============================================================================
+# [A] ローカル sentence-transformers（API キー不要・初回はモデル DL あり）
+embedding_model: intfloat/multilingual-e5-small
+#
+# [B] リモート OpenAI 互換エンドポイント（vLLM / TEI など）を使う場合は
+#     embedding_url を設定して有効化する（設定されている時だけリモートになる）:
+# embedding_model: bge-m3
+# embedding_url: http://your-gpu-host:8001
+#
+# ※ 埋め込みモデルを変更したら、次元/ベクトルが変わるため DB 全体の再取り込みが必要
+#    （既存ペイロードの再ベクトル化は scripts/migrate_embeddings.py で補助できる）。
+
+# =============================================================================
+# LLM — クラウド か ローカル を config だけで切り替えられる
+#   provider: claude | groq | openai_compat
+#     claude        … Anthropic API（要 .env の ANTHROPIC_API_KEY）
+#     groq          … Groq 無料枠（要 .env の GROQ_API_KEY）
+#     openai_compat … 自前のローカル/社内エンドポイント（vLLM / Ollama / llama.cpp。APIキー不要）
+#
+# ★ローカルLLMで動かすには、下の llm_answer_* 3行を自分のエンドポイントに変えるだけ:
+#     llm_answer_provider: openai_compat
+#     llm_answer_model:    your-local-model    # サーバが返すモデル名（例 gemma4-26b / qwen3）
+#     llm_answer_url:      http://your-llm-host:8000
+#   要約・クエリ展開も同じエンドポイントを使う（llm_summary_* を省略すると llm_answer_* を継承）。
+# =============================================================================
+
+# ---- 回答生成（POST /api/ask）。要約・クエリ展開も未設定ならここを継承する ----
+llm_answer_provider: claude            # claude | groq | openai_compat
+llm_answer_model: claude-haiku-4-5-20251001
+# llm_answer_url: http://your-llm-host:8000   # ★openai_compat のときだけ必須
+llm_answer_thinking_budget: 0   # openai_compat の reasoning トークン上限。0=無効。
+                                # llama.cpp で思考を効かせつつ空回答を防ぐなら 512 等を推奨。
+
+# ---- 取り込み時のサマリー/タグ生成（＋クエリ展開）----
+enable_llm_summary: false   # true で L1 要約・タグを LLM 生成（品質↑・取り込みは遅くなる）
+# 省略時は llm_answer_* を継承。別エンジンにしたいときだけ設定する。
+# 例: 取り込み要約だけ無料の Groq に逃がす（要 GROQ_API_KEY）:
+# llm_summary_provider: groq
+# llm_summary_model: meta-llama/llama-4-scout-17b-16e-instruct
+# llm_summary_url: http://your-llm-host:8000   # openai_compat のときだけ
+
+# =============================================================================
+# チャンク分割
+# =============================================================================
+chunk_l1_summary_chars: 200   # L1 サマリーの最大文字数
+chunk_l1_tag_count: 8         # L1 で生成するタグ数の上限
+chunk_l3_max_chars: 500       # L3（段落）チャンクの最大文字数
+chunk_l3_overlap_chars: 100   # L3 のオーバーラップ文字数
+
+# =============================================================================
+# 検索（強化フラグはすべて既定 OFF＝従来挙動。API/MCP のリクエストで都度上書き可）
+# =============================================================================
+search_distance_threshold: 0.3      # 類似度しきい値（小さいほど厳密）
+search_hybrid_enabled: false        # ベクトル検索＋全文(キーワード)検索を RRF 融合
+search_rrf_k: 60                    # RRF の定数（小さいほど上位の差が強調される）
+search_recency_decay_enabled: false # 新しい記事を優先する時間減衰
+search_recency_half_life_days: 180  # 減衰の半減期（日）
+search_recency_floor: 0.5           # 減衰の下限（古い記事もこの係数までしか下がらない）
+search_expand_queries_default: false # /api/search の既定。MCP search_knowledge は常時 ON（語彙ギャップ対策）
+
+# =============================================================================
+# 取り込みワーカー
+# =============================================================================
+worker_count: 4               # 取り込みワーカー数
+max_retries: 3                # ジョブの最大リトライ回数
+failed_job_retention_days: 7  # failed ジョブを自動削除するまでの保持日数（毎日チェック）

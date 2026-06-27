@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "hondana": {
+      "type": "http",
+      "url": "http://localhost:8200/mcp"
+    }
+  }
+}

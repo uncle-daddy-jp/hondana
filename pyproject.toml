@@ -1,0 +1,33 @@
+# HONDANA — config + tooling metadata.
+# Note: the app is a flat module layout (api/ is copied to /app and run as `uvicorn main:app`),
+# so this project is not a pip-installable package — pyproject is used for metadata and tool config.
+
+[project]
+name = "hondana"
+version = "0.2.0"
+description = "Personal RAG knowledge base: multi-format ingest, hierarchical chunking, hybrid search, MCP server."
+requires-python = ">=3.11"
+license = { text = "MIT" }
+# Dependencies are intentionally NOT declared here (this is not a pip-installable package).
+# Single source of truth:
+#   runtime → api/requirements.txt   (installed in the api Docker image)
+#   tests   → api/tests/requirements-test.txt   (pytest / pytest-asyncio)
+#   dev tools → ruff / black (install directly)
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+
+[tool.ruff.lint]
+# Pragmatic default set; E501 handled by the formatter.
+select = ["E", "F", "W", "I", "UP", "B"]
+ignore = ["E501"]
+
+[tool.black]
+line-length = 120
+target-version = ["py311"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+pythonpath = ["api"]
+testpaths = ["api/tests"]
